@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -47,14 +48,14 @@
       <div id="project" style="height: 150px;"></div>
       <div id="cluster" style="height: 150px;"></div>
     </div>
-    <div class="col-sm-4"><div id="users" style="height: 300px;"></div></div>
-    <div class="col-sm-4"><div id="date" style="height: 300px;"></div></div>
+    <div class="col-sm-4"><div style="height: 300px;" id="user"></div></div>
+    <div class="col-sm-4"><div style="height: 300px;" id="date"></div></div>
   </div>
   <div class="row">
-    <div class="col-sm-3"><div id="mem_limit"></div></div>
-    <div class="col-sm-3"><div id="mem_peak"></div></div>
-    <div class="col-sm-3"><div id="cores"></div></div>
-    <div class="col-sm-3"><div id="cpu_mean"></div></div>
+    <div class="col-sm-3"><div style="height: 300px;" id="mem_limit"></div></div>
+    <div class="col-sm-3"><div style="height: 300px;" id="mem_peak"></div></div>
+    <div class="col-sm-3"><div style="height: 300px;" id="cores"></div></div>
+    <div class="col-sm-3"><div style="height: 300px;" id="cpu_mean"></div></div>
   </div>
   <table class="table table-hover">
     <thead>
@@ -66,8 +67,6 @@
       <th>partition</th>
       <th>nodes</th>
       <th>date</th>
-      <th>end</th>
-      <th>start</th>
       <th>jobstate</th>
       <th>cores</th>
       <th>cpu_mean</th>
@@ -95,20 +94,22 @@
 <script src="https://code.highcharts.com/highcharts.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/crossfilter/1.3.12/crossfilter.min.js"></script>
 <script>
-var chart;
 var cf;
 var dim = {};
 var groups = {};
-
+var charts = {};
+var selection_boxes = {};
+var selections = {};
 $(function(){
   $.getJSON('jobstats.json', function(data){
-    console.log(data);
+    // console.log(data);
     cf = crossfilter(data);
     
     dim.project = cf.dimension(function(d){ return d.proj_id; });
     dim.cluster = cf.dimension(function(d){ return d.cluster; });
     dim.user = cf.dimension(function(d){ return d.user; });
     dim.date = cf.dimension(function(d){ return d.date.substring(0,10); });
+    dim.duration = cf.dimension(function(d){ return d.end - d.start; });
     dim.mem_limit = cf.dimension(function(d){ return d.mem_limit; });
     dim.mem_peak = cf.dimension(function(d){ return d.mem_peak; });
     dim.cores = cf.dimension(function(d){ return d.cores; });
@@ -118,48 +119,52 @@ $(function(){
     groups.cluster = dim.cluster.group();
     groups.user = dim.user.group();
     groups.date = dim.date.group();
-    groups.mem_limit = dim.mem_limit.group(function(d) { return Math.floor(d/5); });
-    groups.mem_peak = dim.mem_peak.group(function(d) { return Math.floor(d/5); });
+    groups.duration = dim.duration.group(function(d) { return Math.round(d/600)*600; }); // 10 minute bins
+    groups.mem_limit = dim.mem_limit.group(function(d) { return Math.round(d/5)*5; });
+    groups.mem_peak = dim.mem_peak.group(function(d) { return Math.round(d/5)*5; });
     groups.cores = dim.cores.group();
-    groups.cpu_mean = dim.cpu_mean.group(function(d) { return Math.floor(d/10); })
+    groups.cpu_mean = dim.cpu_mean.group(function(d) { return Math.round(d/10)*10; })
     
-    hc_barplot('project', groups.project.all());
-    hc_barplot('cluster', groups.cluster.all());
-    hc_barplot('users', groups.user.all());
-    hc_barplot('date', groups.date.all());
-    
-    hc_colplot('mem_limit', groups.mem_limit.all());
-    hc_colplot('mem_peak', groups.mem_peak.all());
-    hc_colplot('cores', groups.cores.all());
-    hc_colplot('cpu_mean', groups.cpu_mean.all());
-    
-    table_rows = dim.date.top(40);
-    for(i=0; i<40; i++){
-      var row = table_rows[i];
-      $('table tbody').append('<tr>'+
-        '<td>'+row.proj_id+'</td>'+
-        '<td>'+row.cluster+'</td>'+
-        '<td>'+row.user+'</td>'+
-        '<td>'+row.job_id+'</td>'+
-        '<td>'+row.jobname+'</td>'+
-        '<td>'+row.partition+'</td>'+
-        '<td>'+row.nodes+'</td>'+
-        '<td>'+row.date+'</td>'+
-        '<td>'+row.start+'</td>'+
-        '<td>'+row.end+'</td>'+
-        '<td>'+row.jobstate+'</td>'+
-        '<td>'+row.cores+'</td>'+
-        '<td>'+row.cpu_mean+'</td>'+
-        '<td>'+row.cpu_cores_used_percentile+'</td>'+
-        '<td>'+row.mem_limit+'</td>'+
-        '<td>'+row.mem_median+'</td>'+
-        '<td>'+row.mem_peak+'</td>'+
-      '</tr>');
-      console.log(row);
-    }
+    make_plots();
     
   });
 });
+
+function make_plots(){
+  
+  hc_barplot('project', groups.project.all());
+  hc_barplot('cluster', groups.cluster.all());
+  hc_barplot('user', groups.user.all());
+  hc_barplot('date', groups.date.all());
+  
+  hc_colplot('mem_limit', groups.mem_limit.all(), 5);
+  hc_colplot('mem_peak', groups.mem_peak.all(), 5);
+  hc_colplot('cores', groups.cores.all(), 1);
+  hc_colplot('cpu_mean', groups.cpu_mean.all(), 10);
+  
+  table_rows = dim.date.top(40);
+  for(i=0; i<40; i++){
+    var row = table_rows[i];
+    $('table tbody').append('<tr>'+
+      '<td>'+row.proj_id+'</td>'+
+      '<td>'+row.cluster+'</td>'+
+      '<td>'+row.user+'</td>'+
+      '<td>'+row.job_id+'</td>'+
+      '<td>'+row.jobname+'</td>'+
+      '<td>'+row.partition+'</td>'+
+      '<td>'+row.nodes+'</td>'+
+      '<td>'+row.date+'</td>'+
+      '<td>'+row.jobstate+'</td>'+
+      '<td>'+row.cores+'</td>'+
+      '<td>'+row.cpu_mean+'</td>'+
+      '<td>'+row.cpu_cores_used_percentile+'</td>'+
+      '<td>'+row.mem_limit+'</td>'+
+      '<td>'+row.mem_median+'</td>'+
+      '<td>'+row.mem_peak+'</td>'+
+    '</tr>');
+    // console.log(row);
+  }
+}
 
 
 // Function to prep categorical data for HighCharts
@@ -176,7 +181,8 @@ function hc_cat_data(cf_data) {
 
 // Plot a bar graph (categorical data)
 function hc_barplot(target, cf_data){
-  chart = new Highcharts.Chart({
+  hc_data = hc_cat_data(cf_data);
+  charts[target] = new Highcharts.Chart({
     chart: {
       renderTo: target,
       type: 'bar'
@@ -186,40 +192,107 @@ function hc_barplot(target, cf_data){
     credits: { enabled: false },
     yAxis: { title: { text: '# Jobs' } },
     xAxis: {
-      categories: hc_cat_data(cf_data)[0],
+      categories: hc_data[0],
       title: { text: target }
     },
-    series: [{data: hc_cat_data(cf_data)[1] }]
+    series: [{data: hc_data[1] }]
   });
 }
 
 // Function to prep continous data for HighCharts
-function hc_con_data(cf_data) {
+function hc_con_data(cf_data, periodicity) {
+  if(periodicity === undefined){ periodicity = 1; }
   cf_data.sort(function(a, b) { return a.key - b.key; });
   var data = [];
-  for(i=0; i<cf_data.length; i++){
-    data.push([cf_data[i]['key'], cf_data[i]['value']]);
+  var min = cf_data[0]['key'];
+  var max = cf_data[cf_data.length-1]['key'];
+  var cats = range(min, max+1, periodicity);
+  for(i=0; i<cats.length; i++){
+    var val = 0;
+    for(j=0; j<cf_data.length; j++){
+      if(cf_data[j]['key'] == cats[i]){
+        val = cf_data[j]['value'];
+        break;
+      }
+    }
+    data.push([cats[i], val]);
   }
   return data;
 }
 
 // Plot a column graph (continuous data)
-function hc_colplot(target, cf_data){
-  chart = new Highcharts.Chart({
+function hc_colplot(target, cf_data, periodicity){
+  hc_data = hc_con_data(cf_data, periodicity);
+  charts[target] = new Highcharts.Chart({
     chart: {
       renderTo: target,
-      // type: 'line'
+      type: 'column',
+      zoomType: 'x',
+      events: {
+        selection: function(event) {
+          var xMin = charts[target].xAxis[0].translate((event.xAxis[0]||charts[target].xAxis[0]).min),
+              xMax = charts[target].xAxis[0].translate((event.xAxis[0]||charts[target].xAxis[0]).max),
+              yMin = charts[target].yAxis[0].translate(charts[target].yAxis[0].min),
+              yMax = charts[target].yAxis[0].translate(charts[target].yAxis[0].max);
+              selection_boxes[target].attr({
+                x: xMin + charts[target].plotLeft,
+                y: charts[target].plotHeight + charts[target].plotTop - yMax,
+                width: xMax - xMin,
+                height: yMax - yMin
+              });
+              dataMin = Highcharts.numberFormat(event.xAxis[0].min, 2),
+              dataMax = Highcharts.numberFormat(event.xAxis[0].max, 2),
+              selections[target] = [dataMin, dataMax];
+          update_selection();
+          return false;
+        }
+      }
     },
-    title: { text: target+'Usage' },
+    title: { text: target+' Usage' },
     legend: { enabled: false },
     credits: { enabled: false },
     yAxis: { title: { text: target } },
     xAxis: {
       title: { text: target }
     },
-    series: [{data: hc_con_data(cf_data) }]
+    series: [{data: hc_data }]
   });
+  
+  selection_boxes[target] = charts[target].renderer.rect(0,0,0,0,0).css({
+    fill: 'green',
+    fillOpacity: '.2'
+  }).add();
 }
+
+
+
+function update_selection(){
+  // Clear existing filters
+  for (d in dim){
+    dim[d].filterAll();
+  }
+  // Add current selections as filters
+  for(target in selections){
+    var min = selections[target][0];
+    var max = selections[target][1];
+    dim[target].filterRange([min, max]);
+  }
+  // TODO: The crossfilter groups still seem to return all data after this filter is applied?
+  // dim[target].bottom(3) returns data rows as expected though...
+  
+  // Recreate plots
+  make_plots();
+}
+
+
+function range(start, stop, step) {
+  if (typeof stop == 'undefined') { stop = start; start = 0; }
+  if (typeof step == 'undefined') { step = 1; }
+  if ((step > 0 && start >= stop) || (step < 0 && start <= stop)) { return []; }
+  var result = [];
+  for (var i = start; step > 0 ? i < stop : i > stop; i += step) { result.push(i); }
+  return result;
+};
 
 </script>
 </body>
