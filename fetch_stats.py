@@ -130,7 +130,7 @@ def fetch_stats(projects, days, quiet, verbose):
     for idx, job in enumerate(jobs):
         if idx % 100 == 0:
           logging.debug("Getting summary stats for job {} of {}".format(idx, len(jobs)))
-        efficiency_query = "SELECT * from jobs WHERE job_id = '{}' AND proj_id = '{}' AND user = '{}'".format(job['id'], job['proj_id'], job['user'])
+        efficiency_query = "SELECT * from jobs WHERE job_id = '{}' AND proj_id = '{}' AND user = '{}'".format(job['job_id'], job['proj_id'], job['user'])
         # logging.debug("Running query: {}".format(efficiency_query))
         cursor = efficiency_conn.execute(efficiency_query)
         row = cursor.fetchone()
@@ -151,7 +151,7 @@ def fetch_stats(projects, days, quiet, verbose):
             # jobs[idx]['nodelist'] = row[13]
         except TypeError:
             count_none += 1
-            logging.debug("No results found for job {} ({}, {})".format(job['id'], job['proj_id'], job['user']))
+            logging.debug("No results found for job {} ({}, {})".format(job['job_id'], job['proj_id'], job['user']))
     
     logging.info("Found results for {} out of {} jobs".format(len(jobs)-count_none, len(jobs)))
     

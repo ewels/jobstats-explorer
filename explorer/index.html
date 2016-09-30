@@ -14,6 +14,11 @@
   .content {
     padding: 30px;
   }
+  tbody tr td {
+    font-family: monospace;
+    white-space: nowrap;
+    font-size: 0.8em;
+  }
   footer {
     padding: 20px;
     margin: 20px 0 0;
@@ -37,6 +42,43 @@
   <h1>Hello, world!</h1>
   <p class="lead">Welcome to the jobstats-explorer report!</p>
   <p>Here is some more introduction text.</p>
+  <div class="row">
+    <div class="col-sm-4">
+      <div id="project" style="height: 150px;"></div>
+      <div id="cluster" style="height: 150px;"></div>
+    </div>
+    <div class="col-sm-4"><div id="users" style="height: 300px;"></div></div>
+    <div class="col-sm-4"><div id="date" style="height: 300px;"></div></div>
+  </div>
+  <div class="row">
+    <div class="col-sm-3"><div id="mem_limit"></div></div>
+    <div class="col-sm-3"><div id="mem_peak"></div></div>
+    <div class="col-sm-3"><div id="cores"></div></div>
+    <div class="col-sm-3"><div id="cpu_mean"></div></div>
+  </div>
+  <table class="table table-hover">
+    <thead>
+      <th>proj_id</th>
+      <th>cluster</th>
+      <th>user</th>
+      <th>job_id</th>
+      <th>jobname</th>
+      <th>partition</th>
+      <th>nodes</th>
+      <th>date</th>
+      <th>end</th>
+      <th>start</th>
+      <th>jobstate</th>
+      <th>cores</th>
+      <th>cpu_mean</th>
+      <th>cpu_cores_used_percentile</th>
+      <th>mem_limit</th>
+      <th>mem_median</th>
+      <th>mem_peak</th>
+    </thead>
+    <tbody>
+    </tbody>
+  </table>
 </div>
 
 <footer class="row">
@@ -44,20 +86,141 @@
     <p>Report by Phil Ewels</p>
   </div>
   <div class="col-sm-6 text-right">
-    <a href="http://www.scilifelab.se" target="_blank"><img src="http://placehold.it/200x30?text=SciLifeLab"></a>
+    <a href="https://www.scilifelab.se" target="_blank"><img src="https://placehold.it/200x30?text=SciLifeLab"></a>
   </div>
 </footer>
 
-<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
-<!-- Include all compiled plugins (below), or include individual files as needed -->
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+<script src="https://code.highcharts.com/highcharts.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crossfilter/1.3.12/crossfilter.min.js"></script>
 <script>
+var chart;
+var cf;
+var dim = {};
+var groups = {};
+
 $(function(){
   $.getJSON('jobstats.json', function(data){
     console.log(data);
+    cf = crossfilter(data);
+    
+    dim.project = cf.dimension(function(d){ return d.proj_id; });
+    dim.cluster = cf.dimension(function(d){ return d.cluster; });
+    dim.user = cf.dimension(function(d){ return d.user; });
+    dim.date = cf.dimension(function(d){ return d.date.substring(0,10); });
+    dim.mem_limit = cf.dimension(function(d){ return d.mem_limit; });
+    dim.mem_peak = cf.dimension(function(d){ return d.mem_peak; });
+    dim.cores = cf.dimension(function(d){ return d.cores; });
+    dim.cpu_mean = cf.dimension(function(d){ return d.cpu_mean; });
+    
+    groups.project = dim.project.group();
+    groups.cluster = dim.cluster.group();
+    groups.user = dim.user.group();
+    groups.date = dim.date.group();
+    groups.mem_limit = dim.mem_limit.group(function(d) { return Math.floor(d/5); });
+    groups.mem_peak = dim.mem_peak.group(function(d) { return Math.floor(d/5); });
+    groups.cores = dim.cores.group();
+    groups.cpu_mean = dim.cpu_mean.group(function(d) { return Math.floor(d/10); })
+    
+    hc_barplot('project', groups.project.all());
+    hc_barplot('cluster', groups.cluster.all());
+    hc_barplot('users', groups.user.all());
+    hc_barplot('date', groups.date.all());
+    
+    hc_colplot('mem_limit', groups.mem_limit.all());
+    hc_colplot('mem_peak', groups.mem_peak.all());
+    hc_colplot('cores', groups.cores.all());
+    hc_colplot('cpu_mean', groups.cpu_mean.all());
+    
+    table_rows = dim.date.top(40);
+    for(i=0; i<40; i++){
+      var row = table_rows[i];
+      $('table tbody').append('<tr>'+
+        '<td>'+row.proj_id+'</td>'+
+        '<td>'+row.cluster+'</td>'+
+        '<td>'+row.user+'</td>'+
+        '<td>'+row.job_id+'</td>'+
+        '<td>'+row.jobname+'</td>'+
+        '<td>'+row.partition+'</td>'+
+        '<td>'+row.nodes+'</td>'+
+        '<td>'+row.date+'</td>'+
+        '<td>'+row.start+'</td>'+
+        '<td>'+row.end+'</td>'+
+        '<td>'+row.jobstate+'</td>'+
+        '<td>'+row.cores+'</td>'+
+        '<td>'+row.cpu_mean+'</td>'+
+        '<td>'+row.cpu_cores_used_percentile+'</td>'+
+        '<td>'+row.mem_limit+'</td>'+
+        '<td>'+row.mem_median+'</td>'+
+        '<td>'+row.mem_peak+'</td>'+
+      '</tr>');
+      console.log(row);
+    }
+    
   });
 });
+
+
+// Function to prep categorical data for HighCharts
+function hc_cat_data(cf_data) {
+  cf_data.sort(function(a, b) { return b.value - a.value; });
+  var cats = [];
+  var data = [];
+  for(i=0; i<cf_data.length; i++){
+    cats.push(cf_data[i]['key']);
+    data.push(cf_data[i]['value']);
+  }
+  return [cats, data];
+}
+
+// Plot a bar graph (categorical data)
+function hc_barplot(target, cf_data){
+  chart = new Highcharts.Chart({
+    chart: {
+      renderTo: target,
+      type: 'bar'
+    },
+    title: { text: 'Jobs Per '+target },
+    legend: { enabled: false },
+    credits: { enabled: false },
+    yAxis: { title: { text: '# Jobs' } },
+    xAxis: {
+      categories: hc_cat_data(cf_data)[0],
+      title: { text: target }
+    },
+    series: [{data: hc_cat_data(cf_data)[1] }]
+  });
+}
+
+// Function to prep continous data for HighCharts
+function hc_con_data(cf_data) {
+  cf_data.sort(function(a, b) { return a.key - b.key; });
+  var data = [];
+  for(i=0; i<cf_data.length; i++){
+    data.push([cf_data[i]['key'], cf_data[i]['value']]);
+  }
+  return data;
+}
+
+// Plot a column graph (continuous data)
+function hc_colplot(target, cf_data){
+  chart = new Highcharts.Chart({
+    chart: {
+      renderTo: target,
+      // type: 'line'
+    },
+    title: { text: target+'Usage' },
+    legend: { enabled: false },
+    credits: { enabled: false },
+    yAxis: { title: { text: target } },
+    xAxis: {
+      title: { text: target }
+    },
+    series: [{data: hc_con_data(cf_data) }]
+  });
+}
+
 </script>
 </body>
 </html>
