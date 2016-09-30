@@ -81,7 +81,7 @@ def fetch_stats(projects, days, quiet, verbose):
     logging.info("Fetching {} days of jobstats for projects : {}".format(days, ', '.join(projects)))
     
     # Set up variables
-    jobs = dict()
+    jobs = list()
     node_jobs = dict()
     
     # Connect to the general database
@@ -96,7 +96,7 @@ def fetch_stats(projects, days, quiet, verbose):
     logging.debug("Running query: {}".format(general_query))
     cursor = general_conn.execute(general_query)
     for row in cursor:
-        jobs[row[1]] = {
+        jobs.append({
             'date': row[0],
             'job_id': row[1],
             'proj_id': row[2],
@@ -109,7 +109,7 @@ def fetch_stats(projects, days, quiet, verbose):
             'nodes': row[9],
             'jobname': row[10],
             'jobstate': row[11],
-        }
+        })
         if not row[9] in node_jobs:
             node_jobs[row[9]] = list()
         node_jobs[row[9]].append(row[1])
@@ -126,36 +126,34 @@ def fetch_stats(projects, days, quiet, verbose):
     
     # Get job summary stats - NB: Job IDs not unique across different clusters!
     # list_tables(efficiency_conn)
-    i = 1
     count_none = 0
-    for id in jobs:
-        if i % 100 == 0:
-          logging.debug("Getting summary stats for job {} of {}".format(i, len(jobs)))
-        i += 1
-        efficiency_query = "SELECT * from jobs WHERE job_id = '{}' AND proj_id = '{}' AND user = '{}'".format(id, jobs[id]['proj_id'], jobs[id]['user'])
+    for idx, job in enumerate(jobs):
+        if idx % 100 == 0:
+          logging.debug("Getting summary stats for job {} of {}".format(idx, len(jobs)))
+        efficiency_query = "SELECT * from jobs WHERE job_id = '{}' AND proj_id = '{}' AND user = '{}'".format(job['id'], job['proj_id'], job['user'])
         # logging.debug("Running query: {}".format(efficiency_query))
         cursor = efficiency_conn.execute(efficiency_query)
         row = cursor.fetchone()
         try:
-            # jobs[id]['job_id'] = row[0]
-            # jobs[id]['cluster'] = row[1]
-            # jobs[id]['proj_id'] = row[2]
-            jobs[id]['user'] = row[3]
-            jobs[id]['cpu_mean'] = row[4]
-            jobs[id]['cpu_cores_used_percentile'] = row[5]
-            # jobs[id]['cores'] = row[6]
-            jobs[id]['mem_peak'] = row[7]
-            jobs[id]['mem_median'] = row[8]
-            jobs[id]['mem_limit'] = row[9]
-            jobs[id]['counts'] = row[10]
-            # jobs[id]['state'] = row[11]
-            jobs[id]['date_finished'] = row[12]
-            # jobs[id]['nodelist'] = row[13]
+            # jobs[idx]['job_id'] = row[0]
+            # jobs[idx]['cluster'] = row[1]
+            # jobs[idx]['proj_id'] = row[2]
+            jobs[idx]['user'] = row[3]
+            jobs[idx]['cpu_mean'] = row[4]
+            jobs[idx]['cpu_cores_used_percentile'] = row[5]
+            # jobs[idx]['cores'] = row[6]
+            jobs[idx]['mem_peak'] = row[7]
+            jobs[idx]['mem_median'] = row[8]
+            jobs[idx]['mem_limit'] = row[9]
+            jobs[idx]['counts'] = row[10]
+            # jobs[idx]['state'] = row[11]
+            jobs[idx]['date_finished'] = row[12]
+            # jobs[idx]['nodelist'] = row[13]
         except TypeError:
             count_none += 1
-            logging.debug("No results found for job {} ({}, {})".format(id, jobs[id]['proj_id'], jobs[id]['user']))
+            logging.debug("No results found for job {} ({}, {})".format(job['id'], job['proj_id'], job['user']))
     
-    logging.info("Found results for {} out of {} jobs".format(i-count_none, i))
+    logging.info("Found results for {} out of {} jobs".format(len(jobs)-count_none, len(jobs)))
     
     # Close efficiency stats database
     efficiency_conn.close()
