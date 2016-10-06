@@ -56,12 +56,19 @@ Fields:
 * `proj_id`
 * `user`
 * `cpu_mean`
+  * The mean cpu usage of the job, all time points and all cores included. Normalised by # booked cores, so 0-100%.
 * `cpu_cores_used_percentile`
+  * Don't use this value. It counts the 75th percentile of how many cpus that were active simultaneously over all time points.
 * `cores`
+  * The number of cores the job had booked.
 * `mem_peak`
+  * The peak RAM usage during the job (Gb)
 * `mem_median`
+  * Median RAM usage (Gb)
 * `mem_limit`
+  * The amount of RAM the job had access to (8GB per core on ordinary nodes).
 * `counts`
+  * The number of measurement points we have collected during the job (taken roughly every 5 minutes).
 * `state`
 * `date_finished`
 * `nodelist`

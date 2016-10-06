@@ -17,13 +17,13 @@ for 30 days. Martin Dahlo then saves all of these permanently into three databas
     > processed efficiency values, that summarize each job to a few numbers, but
     > not a timeline like in the jobstats plots.  It can be used to quickly get the efficiency info.
 
-* /proj/b2013023/statistics/job_stats_raw/stats
-    > contains the raw jobstats data which can be used to do the timeline
-    > these stats are in a slightly more complex format though - the database is sharded into one
-    > database per node since there are so many jobs ant the raw data is quite fluffy. It was very
-    > slow to have them all in a single sqlite db so i created a sqlite file for each node.
-    > They are all identical in structure inside so you'll have to have the node name the job ran on
-    > (from general.sqlite), then open a connection to it and query the db
+On tools, we filter for these UPPMAX projects:
+* a2010002
+* a2015205
+* a2012043
+* b2013064
+* ngi2016004
+* ngi2016003
 
 Author: Phil Ewels <phil.ewels@scilifelab.se>
 Started: 29-09-2016
@@ -33,7 +33,9 @@ from __future__ import print_function
 import click
 import json
 import logging
+import os
 import time
+import shutil
 import sqlite3
 
 __version__ = 0.1
@@ -50,13 +52,16 @@ config = {
 @click.option('-A', '--project', 'projects',
     type = str,
     multiple = True,
-    required = True,
     help = "UPPMAX Project ID to filter for. You can specify multiple projects by repeating this flag."
 )
 @click.option('-d', '--days',
     type = int,
-    default = 14,
-    help = "Number of days' statistics to fetch, counted back from now. Default: 14"
+    help = "Number of days' statistics to fetch, counted back from now."
+)
+@click.option('-o', '--jobstats_dir',
+    type = str,
+    default = 'jobstat_files',
+    help = "Directory to save jobstats files to. Default: jobstat_files"
 )
 @click.option('-q', '--quiet',
     is_flag = True,
@@ -68,7 +73,7 @@ config = {
 )
 @click.version_option(__version__)
 
-def fetch_stats(projects, days, quiet, verbose):
+def fetch_stats(projects, days, jobstats_dir, quiet, verbose):
     
     # Set up the log
     if verbose:
@@ -90,9 +95,13 @@ def fetch_stats(projects, days, quiet, verbose):
     logging.debug("  ..connected")
     
     # Fetch jobs from this project
-    timestamp = int(time.time())
-    since = timestamp - (days*24*60*60)
-    general_query = "SELECT * from jobs WHERE start > {} and proj_id IN ('{}')".format(since, "','".join(projects))
+    general_query = "SELECT * from jobs"
+    if days is not None:
+        timestamp = int(time.time())
+        since = timestamp - (days*24*60*60)
+        general_query += " WHERE start > {}".format(since)
+    if len(projects) > 0:
+        general_query += " and proj_id IN ('{}')".format("','".join(projects))
     logging.debug("Running query: {}".format(general_query))
     cursor = general_conn.execute(general_query)
     for row in cursor:
@@ -160,6 +169,16 @@ def fetch_stats(projects, days, quiet, verbose):
     
     # Print parsed data to stdout
     print(json.dumps(jobs))
+    
+    # Copy the jobstat files to a directory
+    for job in jobs:
+        src = "/sw/share/slurm/milou/uppmax_jobstats/{}/{}/{}".format(job['cluster'], job['nodes'], job['job_id'])
+        dst = os.path.join(jobstats_dir, job['cluster'], job['nodes'], job['job_id'])
+        try:
+            os.makedirs(os.path.dirname(dst))
+        except OSError:
+            pass
+        shutil.copyfile(src, dst)
 
 
 def list_tables(db_conn):
