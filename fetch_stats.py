@@ -171,14 +171,25 @@ def fetch_stats(projects, days, jobstats_dir, quiet, verbose):
     print(json.dumps(jobs))
     
     # Copy the jobstat files to a directory
+    logging.debug("Starting to copy files to {}".format(jobstats_dir))
+    num_copied = 0
+    num_existed = 0
     for job in jobs:
-        src = "/sw/share/slurm/milou/uppmax_jobstats/{}/{}/{}".format(job['cluster'], job['nodes'], job['job_id'])
-        dst = os.path.join(jobstats_dir, job['cluster'], job['nodes'], job['job_id'])
+        src = "/sw/share/slurm/{}/uppmax_jobstats/{}/{}".format(job['cluster'], job['nodes'], job['job_id'])
+        dst = os.path.join(jobstats_dir, job['cluster'], job['nodes'], str(job['job_id']))
         try:
             os.makedirs(os.path.dirname(dst))
         except OSError:
             pass
-        shutil.copyfile(src, dst)
+        if os.path.isfile(dst):
+            num_existed += 1
+        else:
+            try:
+                shutil.copyfile(src, dst)
+                num_copied += 1
+            except IOError:
+                pass
+    logging.info("Copied jobstats files for {} out of {} jobs ({} already there)".format(num_copied, len(jobs), num_existed))
 
 
 def list_tables(db_conn):
